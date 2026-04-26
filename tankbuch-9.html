@@ -1,0 +1,991 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, viewport-fit=cover">
+<title>Tankbuch</title>
+
+<!-- PWA / iOS -->
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Tankbuch">
+<meta name="theme-color" content="#0a0a0f">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="description" content="Persönliches Tankbuch – Kosten & Verbrauch im Blick">
+
+<!-- PWA Manifest (inline als Data-URL) -->
+<link rel="manifest" href="data:application/json,%7B%22name%22%3A%22Tankbuch%22%2C%22short_name%22%3A%22Tankbuch%22%2C%22description%22%3A%22Tank-Historie%20%26%20Kosten%22%2C%22start_url%22%3A%22.%2Ftankbuch.html%22%2C%22display%22%3A%22standalone%22%2C%22background_color%22%3A%22%230a0a0f%22%2C%22theme_color%22%3A%22%230a0a0f%22%2C%22orientation%22%3A%22portrait%22%2C%22icons%22%3A%5B%7B%22src%22%3A%22data%3Aimage%2Fsvg%2Bxml%2C%253Csvg%2520xmlns%3D'http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg'%2520viewBox%3D'0%200%20512%20512'%253E%253Crect%2520width%3D'512'%2520height%3D'512'%2520rx%3D'100'%2520fill%3D'%230a0a0f'%2F%253E%253Ctext%2520x%3D'256'%2520y%3D'340'%2520font-size%3D'300'%2520text-anchor%3D'middle'%253E%E2%9B%BD%253C%2Ftext%253E%253C%2Fsvg%253E%22%2C%22sizes%22%3A%22512x512%22%2C%22type%22%3A%22image%2Fsvg%2Bxml%22%7D%5D%7D">
+
+<link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0a0a0f;
+    --surface: #12121a;
+    --surface2: #1a1a26;
+    --border: #2a2a3a;
+    --text: #e8e8f0;
+    --muted: #666680;
+    --blue: #4f9cf9;
+    --blue-dim: #1a3a6a;
+    --cyan: #34d399;
+    --cyan-dim: #0d3d2a;
+    --orange: #fb923c;
+    --orange-dim: #3d1f0d;
+    --purple: #a78bfa;
+    --purple-dim: #2d1a5a;
+    --yellow: #fbbf24;
+    --yellow-dim: #3d2d0d;
+    --red: #f87171;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'DM Sans', sans-serif;
+    min-height: 100vh;
+    min-height: 100dvh;
+    padding-bottom: calc(100px + env(safe-area-inset-bottom));
+    padding-left: env(safe-area-inset-left);
+    padding-right: env(safe-area-inset-right);
+  }
+
+  /* ── Header ── */
+  .header {
+    padding: calc(env(safe-area-inset-top) + 20px) 20px 0;
+    position: sticky;
+    top: 0;
+    z-index: 50;
+    background: var(--bg);
+  }
+  .header-top {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 6px;
+  }
+  .header h1 {
+    font-family: 'Space Mono', monospace;
+    font-size: 26px;
+    font-weight: 700;
+    letter-spacing: -1px;
+    color: var(--text);
+  }
+  .header-sub {
+    font-size: 12px;
+    color: var(--muted);
+    font-family: 'Space Mono', monospace;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+  }
+  .year-badge {
+    background: var(--blue-dim);
+    color: var(--blue);
+    font-family: 'Space Mono', monospace;
+    font-size: 12px;
+    padding: 4px 10px;
+    border-radius: 20px;
+    border: 1px solid var(--blue);
+    letter-spacing: 1px;
+  }
+
+  /* ── Filter Bar ── */
+  .filter-bar {
+    display: flex;
+    gap: 8px;
+    padding: 14px 20px;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+  .filter-bar::-webkit-scrollbar { display: none; }
+  .filter-chip {
+    flex-shrink: 0;
+    padding: 6px 14px;
+    border-radius: 20px;
+    border: 1px solid var(--border);
+    background: var(--surface);
+    color: var(--muted);
+    font-size: 13px;
+    cursor: pointer;
+    transition: all 0.2s;
+    font-family: 'DM Sans', sans-serif;
+  }
+  .filter-chip.active {
+    border-color: var(--blue);
+    background: var(--blue-dim);
+    color: var(--blue);
+  }
+
+  /* ── Cards Grid ── */
+  .cards-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+    padding: 0 20px 4px;
+  }
+  .card {
+    background: var(--surface);
+    border-radius: 18px;
+    padding: 16px;
+    border: 1px solid var(--border);
+    position: relative;
+    overflow: hidden;
+  }
+  .card::after {
+    content: '';
+    position: absolute;
+    bottom: 0; left: 0; right: 0;
+    height: 3px;
+    border-radius: 0 0 18px 18px;
+  }
+  .card.blue::after  { background: var(--blue); }
+  .card.cyan::after  { background: var(--cyan); }
+  .card.orange::after { background: var(--orange); }
+  .card.purple::after { background: var(--purple); }
+
+  .card-label {
+    font-size: 10px;
+    font-family: 'Space Mono', monospace;
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-bottom: 6px;
+  }
+  .card-value {
+    font-family: 'Space Mono', monospace;
+    font-size: 26px;
+    font-weight: 700;
+    line-height: 1;
+    margin-bottom: 2px;
+  }
+  .card.blue  .card-value { color: var(--blue); }
+  .card.cyan  .card-value { color: var(--cyan); }
+  .card.orange .card-value { color: var(--orange); }
+  .card.purple .card-value { color: var(--purple); }
+  .card-unit {
+    font-size: 11px;
+    color: var(--muted);
+    font-family: 'Space Mono', monospace;
+  }
+
+  /* ── Wide card (Fahrzeuge) ── */
+  .card.wide {
+    grid-column: 1 / -1;
+  }
+  .fz-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 8px 0;
+    border-bottom: 1px solid var(--border);
+  }
+  .fz-row:last-child { border-bottom: none; }
+  .fz-name { font-size: 13px; font-weight: 500; }
+  .fz-cost {
+    font-family: 'Space Mono', monospace;
+    font-size: 14px;
+    color: var(--orange);
+  }
+  .fz-bar-wrap {
+    flex: 1;
+    height: 4px;
+    background: var(--border);
+    border-radius: 4px;
+    margin: 0 12px;
+    overflow: hidden;
+  }
+  .fz-bar {
+    height: 100%;
+    border-radius: 4px;
+    background: var(--orange);
+    transition: width 0.6s ease;
+  }
+
+  /* ── Section title ── */
+  .section-title {
+    padding: 18px 20px 10px;
+    font-size: 11px;
+    font-family: 'Space Mono', monospace;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    color: var(--muted);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  .entry-count {
+    background: var(--surface2);
+    padding: 2px 8px;
+    border-radius: 10px;
+    font-size: 10px;
+    color: var(--muted);
+  }
+
+  /* ── History list ── */
+  .history-list {
+    padding: 0 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+  .history-item {
+    background: var(--surface);
+    border-radius: 16px;
+    border: 1px solid var(--border);
+    padding: 14px 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    cursor: pointer;
+    transition: border-color 0.2s, background 0.2s;
+    animation: slideIn 0.3s ease;
+  }
+  @keyframes slideIn {
+    from { opacity: 0; transform: translateY(10px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+  .history-item:active { background: var(--surface2); }
+  .history-top {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+  }
+  .hist-car {
+    font-weight: 600;
+    font-size: 15px;
+    color: var(--text);
+  }
+  .hist-date {
+    font-family: 'Space Mono', monospace;
+    font-size: 11px;
+    color: var(--muted);
+  }
+  .hist-cost {
+    font-family: 'Space Mono', monospace;
+    font-size: 22px;
+    font-weight: 700;
+    color: var(--orange);
+  }
+  .hist-stats {
+    display: flex;
+    gap: 16px;
+    flex-wrap: wrap;
+  }
+  .hist-stat {
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+  }
+  .hist-stat-label {
+    font-size: 9px;
+    font-family: 'Space Mono', monospace;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    color: var(--muted);
+  }
+  .hist-stat-value {
+    font-size: 13px;
+    font-family: 'Space Mono', monospace;
+    color: var(--text);
+  }
+  .delete-btn {
+    background: none;
+    border: none;
+    color: var(--red);
+    font-size: 16px;
+    cursor: pointer;
+    padding: 4px;
+    opacity: 0.6;
+    transition: opacity 0.2s;
+    align-self: flex-end;
+  }
+  .delete-btn:hover { opacity: 1; }
+
+  /* ── Empty state ── */
+  .empty-state {
+    text-align: center;
+    padding: 40px 20px;
+    color: var(--muted);
+  }
+  .empty-state .icon { font-size: 48px; margin-bottom: 12px; }
+  .empty-state p { font-size: 14px; line-height: 1.6; }
+
+  /* ── Bottom Nav ── */
+  .bottom-nav {
+    position: fixed;
+    bottom: 0; left: 0; right: 0;
+    background: rgba(10,10,15,0.95);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border-top: 1px solid var(--border);
+    display: flex;
+    padding: 10px 0 calc(16px + env(safe-area-inset-bottom));
+    z-index: 100;
+  }
+  .nav-btn {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+    background: none;
+    border: none;
+    cursor: pointer;
+    padding: 6px;
+    color: var(--muted);
+    font-family: 'DM Sans', sans-serif;
+    font-size: 10px;
+    transition: color 0.2s;
+  }
+  .nav-btn.active { color: var(--blue); }
+  .nav-btn .nav-icon { font-size: 22px; }
+
+  /* ── FAB ── */
+  .fab {
+    position: fixed;
+    bottom: calc(80px + env(safe-area-inset-bottom));
+    right: max(20px, env(safe-area-inset-right));
+    width: 56px;
+    height: 56px;
+    border-radius: 18px;
+    background: var(--blue);
+    color: white;
+    font-size: 26px;
+    border: none;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 4px 20px rgba(79,156,249,0.4);
+    transition: transform 0.2s, box-shadow 0.2s;
+    z-index: 90;
+  }
+  .fab:active { transform: scale(0.93); }
+
+  /* ── Modal ── */
+  .modal-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.7);
+    z-index: 200;
+    display: flex;
+    align-items: flex-end;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.25s;
+  }
+  .modal-overlay.open {
+    opacity: 1;
+    pointer-events: all;
+  }
+  .modal {
+    background: var(--surface);
+    border-radius: 24px 24px 0 0;
+    padding: 24px 20px 40px;
+    width: 100%;
+    border-top: 1px solid var(--border);
+    transform: translateY(100%);
+    transition: transform 0.35s cubic-bezier(.32,1.1,.5,1);
+    max-height: 92vh;
+    overflow-y: auto;
+  }
+  .modal-overlay.open .modal {
+    transform: translateY(0);
+  }
+  .modal-handle {
+    width: 36px;
+    height: 4px;
+    background: var(--border);
+    border-radius: 2px;
+    margin: 0 auto 20px;
+  }
+  .modal h2 {
+    font-family: 'Space Mono', monospace;
+    font-size: 18px;
+    margin-bottom: 20px;
+    color: var(--text);
+  }
+
+  /* ── Form ── */
+  .form-group { margin-bottom: 16px; }
+  .form-label {
+    display: block;
+    font-size: 10px;
+    font-family: 'Space Mono', monospace;
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-bottom: 8px;
+  }
+  .form-input, .form-select {
+    width: 100%;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 12px 14px;
+    color: var(--text);
+    font-size: 15px;
+    font-family: 'DM Sans', sans-serif;
+    outline: none;
+    transition: border-color 0.2s;
+    -webkit-appearance: none;
+  }
+  .form-input:focus, .form-select:focus {
+    border-color: var(--blue);
+  }
+  .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+
+  /* Computed cost display */
+  .cost-preview {
+    background: var(--orange-dim);
+    border: 1px solid var(--orange);
+    border-radius: 12px;
+    padding: 12px 14px;
+    font-family: 'Space Mono', monospace;
+    font-size: 20px;
+    color: var(--orange);
+    text-align: center;
+    font-weight: 700;
+  }
+  .cost-preview-label {
+    font-size: 9px;
+    letter-spacing: 1.5px;
+    color: var(--muted);
+    text-transform: uppercase;
+    text-align: center;
+    margin-bottom: 6px;
+  }
+
+  .btn-primary {
+    width: 100%;
+    background: var(--blue);
+    color: white;
+    border: none;
+    border-radius: 14px;
+    padding: 16px;
+    font-size: 16px;
+    font-weight: 600;
+    font-family: 'DM Sans', sans-serif;
+    cursor: pointer;
+    margin-top: 8px;
+    transition: opacity 0.2s;
+  }
+  .btn-primary:active { opacity: 0.8; }
+
+  /* ── Fahrzeug-Tab ── */
+  .fz-manager {
+    padding: 0 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+  .fz-item {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 14px 16px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+  .fz-item-name { font-weight: 600; font-size: 15px; }
+  .fz-item-del {
+    background: none;
+    border: none;
+    color: var(--red);
+    font-size: 18px;
+    cursor: pointer;
+    opacity: 0.6;
+    padding: 4px 8px;
+  }
+  .fz-add-row {
+    display: flex;
+    gap: 10px;
+  }
+  .fz-add-row .form-input { flex: 1; }
+  .btn-add {
+    background: var(--cyan-dim);
+    border: 1px solid var(--cyan);
+    color: var(--cyan);
+    border-radius: 12px;
+    padding: 12px 18px;
+    font-size: 20px;
+    cursor: pointer;
+  }
+
+  /* pages */
+  .page { display: none; }
+  .page.active { display: block; }
+
+  .divider {
+    height: 1px;
+    background: var(--border);
+    margin: 0 20px 4px;
+  }
+</style>
+</head>
+<body>
+
+<!-- ── Pages ── -->
+<div id="page-home" class="page active">
+  <div class="header">
+    <div class="header-top">
+      <div>
+        <div class="header-sub">Tankbuch</div>
+        <h1>Übersicht</h1>
+      </div>
+      <div class="year-badge" id="year-badge">2025</div>
+    </div>
+  </div>
+
+  <div class="filter-bar" id="filter-bar">
+    <div class="filter-chip active" data-fz="all">Alle</div>
+  </div>
+
+  <div class="cards-grid">
+    <div class="card blue">
+      <div class="card-label">Jahreskosten</div>
+      <div class="card-value" id="card-total">0,00</div>
+      <div class="card-unit">Euro</div>
+    </div>
+    <div class="card orange">
+      <div class="card-label">Ø Preis/Liter</div>
+      <div class="card-value" id="card-avg-price">–</div>
+      <div class="card-unit">€ / Liter</div>
+    </div>
+    <div class="card cyan">
+      <div class="card-label">Ø Verbrauch</div>
+      <div class="card-value" id="card-avg-consumption">–</div>
+      <div class="card-unit">L / 100 km</div>
+    </div>
+    <div class="card purple">
+      <div class="card-label">Tankungen</div>
+      <div class="card-value" id="card-count">0</div>
+      <div class="card-unit">Gesamt</div>
+    </div>
+
+    <div class="card wide orange" id="card-vehicles" style="display:none;">
+      <div class="card-label" style="margin-bottom:12px;">Kosten pro Fahrzeug</div>
+      <div id="fz-bars"></div>
+    </div>
+  </div>
+
+  <div class="section-title">
+    Historie
+    <span class="entry-count" id="entry-count">0 Einträge</span>
+  </div>
+  <div class="history-list" id="history-list">
+    <div class="empty-state">
+      <div class="icon">⛽</div>
+      <p>Noch keine Einträge.<br>Tippe auf <strong>+</strong> um zu starten.</p>
+    </div>
+  </div>
+</div>
+
+<div id="page-fz" class="page">
+  <div class="header">
+    <div class="header-top">
+      <div>
+        <div class="header-sub">Verwaltung</div>
+        <h1>Fahrzeuge</h1>
+      </div>
+    </div>
+  </div>
+  <br>
+  <div class="section-title">Fahrzeug hinzufügen</div>
+  <div class="fz-manager">
+    <div class="fz-add-row">
+      <input class="form-input" id="fz-input" placeholder="z. B. VW Golf" />
+      <button class="btn-add" onclick="addFahrzeug()">＋</button>
+    </div>
+    <div id="fz-list"></div>
+  </div>
+</div>
+
+<!-- ── Bottom Nav ── -->
+<div class="bottom-nav">
+  <button class="nav-btn active" id="nav-home" onclick="showPage('home')">
+    <span class="nav-icon">⛽</span>Konto
+  </button>
+  <button class="nav-btn" id="nav-fz" onclick="showPage('fz')">
+    <span class="nav-icon">🚗</span>Fahrzeuge
+  </button>
+</div>
+
+<!-- ── FAB ── -->
+<button class="fab" onclick="openModal()" id="fab">＋</button>
+
+<!-- ── Add Entry Modal ── -->
+<div class="modal-overlay" id="modal">
+  <div class="modal">
+    <div class="modal-handle"></div>
+    <h2>Neuer Tankeintrag</h2>
+
+    <div class="form-group">
+      <label class="form-label">Fahrzeug</label>
+      <select class="form-select" id="f-car"></select>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Datum</label>
+      <input type="date" class="form-input" id="f-date">
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label class="form-label">KM-Stand</label>
+        <input type="number" class="form-input" id="f-km" placeholder="45 200">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Getankt (L)</label>
+        <input type="number" step="0.01" class="form-input" id="f-liter" placeholder="45,00">
+      </div>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Preis pro Liter (€)</label>
+      <input type="number" step="0.001" class="form-input" id="f-price" placeholder="1,799">
+    </div>
+
+    <div class="cost-preview-label">Gesamtkosten</div>
+    <div class="cost-preview" id="cost-preview">€ 0,00</div>
+
+    <button class="btn-primary" onclick="saveEntry()" style="margin-top:16px;">Speichern</button>
+    <button class="btn-primary" onclick="closeModal()" style="background:var(--surface2);color:var(--muted);margin-top:8px;">Abbrechen</button>
+  </div>
+</div>
+
+<script>
+// ── State ──────────────────────────────────────────────────────────────
+let state = {
+  entries: [],
+  fahrzeuge: [],
+  filterFz: 'all',
+  filterYear: new Date().getFullYear()
+};
+
+function save() {
+  try {
+    localStorage.setItem('tankbuch_v2', JSON.stringify(state));
+  } catch(e) { console.warn('Speichern fehlgeschlagen:', e); }
+}
+function load() {
+  try {
+    const d = localStorage.getItem('tankbuch_v2');
+    if (d) {
+      const parsed = JSON.parse(d);
+      state.entries    = parsed.entries    || [];
+      state.fahrzeuge  = parsed.fahrzeuge  || [];
+      state.filterFz   = 'all';
+      state.filterYear = new Date().getFullYear();
+    }
+  } catch(e) {
+    console.warn('Laden fehlgeschlagen:', e);
+  }
+}
+
+// ── Navigation ─────────────────────────────────────────────────────────
+function showPage(name) {
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
+  document.getElementById('page-' + name).classList.add('active');
+  document.getElementById('nav-' + name).classList.add('active');
+  document.getElementById('fab').style.display = name === 'home' ? 'flex' : 'none';
+  if (name === 'fz') renderFzPage();
+  if (name === 'home') renderAll();
+}
+
+// ── Modal ──────────────────────────────────────────────────────────────
+function openModal() {
+  const today = new Date().toISOString().split('T')[0];
+  document.getElementById('f-date').value = today;
+  document.getElementById('f-km').value = '';
+  document.getElementById('f-liter').value = '';
+  document.getElementById('f-price').value = '';
+  document.getElementById('cost-preview').textContent = '€ 0,00';
+  populateCarSelect();
+  document.getElementById('modal').classList.add('open');
+}
+function closeModal() {
+  document.getElementById('modal').classList.remove('open');
+}
+document.getElementById('modal').addEventListener('click', function(e) {
+  if (e.target === this) closeModal();
+});
+
+function populateCarSelect() {
+  const sel = document.getElementById('f-car');
+  sel.innerHTML = '';
+  if (state.fahrzeuge.length === 0) {
+    sel.innerHTML = '<option value="">– Erst Fahrzeug anlegen –</option>';
+    return;
+  }
+  state.fahrzeuge.forEach(fz => {
+    const o = document.createElement('option');
+    o.value = fz; o.textContent = fz;
+    sel.appendChild(o);
+  });
+}
+
+// Auto-compute cost
+['f-liter','f-price'].forEach(id => {
+  document.getElementById(id).addEventListener('input', updateCostPreview);
+});
+function updateCostPreview() {
+  const l = parseFloat(document.getElementById('f-liter').value) || 0;
+  const p = parseFloat(document.getElementById('f-price').value) || 0;
+  const total = l * p;
+  document.getElementById('cost-preview').textContent = '€ ' + fmt(total);
+}
+
+function saveEntry() {
+  const car   = document.getElementById('f-car').value;
+  const date  = document.getElementById('f-date').value;
+  const km    = parseFloat(document.getElementById('f-km').value);
+  const liter = parseFloat(document.getElementById('f-liter').value);
+  const price = parseFloat(document.getElementById('f-price').value);
+
+  if (!car || !date || isNaN(km) || isNaN(liter) || isNaN(price)) {
+    alert('Bitte alle Felder ausfüllen.');
+    return;
+  }
+
+  // Calculate km driven (compare with last entry for same car)
+  const prev = state.entries
+    .filter(e => e.car === car)
+    .sort((a,b) => new Date(b.date) - new Date(a.date))[0];
+  const kmDriven = prev ? (km - prev.km) : null;
+  const consumption = (kmDriven && kmDriven > 0) ? (liter / kmDriven * 100) : null;
+
+  state.entries.push({
+    id: Date.now(),
+    car, date, km, liter, price,
+    total: liter * price,
+    kmDriven, consumption
+  });
+  state.entries.sort((a,b) => new Date(b.date) - new Date(a.date));
+  save();
+  closeModal();
+  renderAll();
+}
+
+// ── Render ─────────────────────────────────────────────────────────────
+function fmt(n, dec=2) {
+  const num = parseFloat(n);
+  if (isNaN(num) || n === null || n === undefined) return '–';
+  return num.toLocaleString('de-DE', {minimumFractionDigits: dec, maximumFractionDigits: dec});
+}
+
+function getFiltered() {
+  return state.entries.filter(e => {
+    const yearMatch = new Date(e.date).getFullYear() === state.filterYear;
+    const fzMatch   = state.filterFz === 'all' || e.car === state.filterFz;
+    return yearMatch && fzMatch;
+  });
+}
+
+function renderAll() {
+  renderFilters();
+  renderCards();
+  renderHistory();
+}
+
+function renderFilters() {
+  const bar = document.getElementById('filter-bar');
+  bar.innerHTML = '';
+
+  const addChip = (label, val) => {
+    const d = document.createElement('div');
+    d.className = 'filter-chip' + (state.filterFz === val ? ' active' : '');
+    d.textContent = label;
+    d.onclick = () => { state.filterFz = val; renderAll(); };
+    bar.appendChild(d);
+  };
+  addChip('Alle', 'all');
+  state.fahrzeuge.forEach(fz => addChip(fz, fz));
+
+  document.getElementById('year-badge').textContent = state.filterYear;
+  document.getElementById('year-badge').onclick = toggleYear;
+}
+
+function toggleYear() {
+  const years = [...new Set(state.entries.map(e => new Date(e.date).getFullYear()))];
+  years.sort((a,b) => b-a);
+  const cur = years.indexOf(state.filterYear);
+  const next = years[(cur + 1) % years.length];
+  if (next !== undefined) { state.filterYear = next; renderAll(); }
+}
+
+function renderCards() {
+  const entries = getFiltered();
+  // Sanitize: only entries with valid numbers
+  const valid = entries.filter(e => !isNaN(parseFloat(e.total)) && !isNaN(parseFloat(e.price)));
+  const total  = valid.reduce((s,e) => s + (parseFloat(e.total) || 0), 0);
+  const avgP   = valid.length ? valid.reduce((s,e) => s + (parseFloat(e.price) || 0), 0) / valid.length : null;
+  const withC  = valid.filter(e => e.consumption !== null && !isNaN(parseFloat(e.consumption)));
+  const avgC   = withC.length ? withC.reduce((s,e) => s + parseFloat(e.consumption), 0) / withC.length : null;
+
+  document.getElementById('card-total').textContent = fmt(total);
+  document.getElementById('card-avg-price').textContent = avgP !== null ? fmt(avgP, 3) : '–';
+  document.getElementById('card-avg-consumption').textContent = avgC !== null ? fmt(avgC, 1) : '–';
+  document.getElementById('card-count').textContent = entries.length;
+  document.getElementById('entry-count').textContent = entries.length + ' Einträge';
+
+  // Per-vehicle bars
+  const fzCard = document.getElementById('card-vehicles');
+  const allEntries = state.entries.filter(e => new Date(e.date).getFullYear() === state.filterYear);
+  const fzCosts = {};
+  state.fahrzeuge.forEach(fz => {
+    fzCosts[fz] = allEntries.filter(e => e.car === fz).reduce((s,e) => s + (parseFloat(e.total) || 0), 0);
+  });
+  const maxCost = Math.max(...Object.values(fzCosts), 1);
+  const hasCosts = Object.values(fzCosts).some(v => v > 0);
+
+  if (hasCosts && state.fahrzeuge.length > 1) {
+    fzCard.style.display = '';
+    const bars = document.getElementById('fz-bars');
+    bars.innerHTML = '';
+    state.fahrzeuge.forEach(fz => {
+      const cost = fzCosts[fz] || 0;
+      const pct  = (cost / maxCost * 100).toFixed(1);
+      bars.innerHTML += `
+        <div class="fz-row">
+          <div class="fz-name">${fz}</div>
+          <div class="fz-bar-wrap"><div class="fz-bar" style="width:${pct}%"></div></div>
+          <div class="fz-cost">€ ${fmt(cost)}</div>
+        </div>`;
+    });
+  } else {
+    fzCard.style.display = 'none';
+  }
+}
+
+function renderHistory() {
+  const list = document.getElementById('history-list');
+  const entries = getFiltered();
+
+  if (!entries.length) {
+    list.innerHTML = `<div class="empty-state"><div class="icon">⛽</div><p>Noch keine Einträge.<br>Tippe auf <strong>+</strong> um zu starten.</p></div>`;
+    return;
+  }
+
+  list.innerHTML = entries.map(e => {
+    const d = new Date(e.date);
+    const dateStr = d.toLocaleDateString('de-DE', {day:'2-digit', month:'2-digit', year:'numeric'});
+    const consump = e.consumption !== null ? fmt(e.consumption, 1) + ' L/100' : '–';
+    const kmStr   = e.kmDriven !== null ? fmt(e.kmDriven, 0) + ' km' : '–';
+
+    return `<div class="history-item">
+      <div class="history-top">
+        <div>
+          <div class="hist-car">${e.car}</div>
+          <div class="hist-date">${dateStr}</div>
+        </div>
+        <div class="hist-cost">€ ${fmt(e.total)}</div>
+      </div>
+      <div class="hist-stats">
+        <div class="hist-stat">
+          <div class="hist-stat-label">KM-Stand</div>
+          <div class="hist-stat-value">${fmt(e.km, 0)}</div>
+        </div>
+        <div class="hist-stat">
+          <div class="hist-stat-label">Liter</div>
+          <div class="hist-stat-value">${fmt(e.liter, 2)} L</div>
+        </div>
+        <div class="hist-stat">
+          <div class="hist-stat-label">Preis/L</div>
+          <div class="hist-stat-value">€ ${fmt(e.price, 3)}</div>
+        </div>
+        <div class="hist-stat">
+          <div class="hist-stat-label">Gefahren</div>
+          <div class="hist-stat-value">${kmStr}</div>
+        </div>
+        <div class="hist-stat">
+          <div class="hist-stat-label">Verbrauch</div>
+          <div class="hist-stat-value">${consump}</div>
+        </div>
+      </div>
+      <button class="delete-btn" onclick="deleteEntry(${e.id})">🗑 Löschen</button>
+    </div>`;
+  }).join('');
+}
+
+function deleteEntry(id) {
+  if (!confirm('Eintrag löschen?')) return;
+  state.entries = state.entries.filter(e => e.id !== id);
+  save();
+  renderAll();
+}
+
+// ── Fahrzeuge Page ─────────────────────────────────────────────────────
+function renderFzPage() {
+  const list = document.getElementById('fz-list');
+  list.innerHTML = state.fahrzeuge.map((fz, i) => `
+    <div class="fz-item">
+      <div class="fz-item-name">🚗 ${fz}</div>
+      <button class="fz-item-del" onclick="deleteFahrzeug(${i})">✕</button>
+    </div>`).join('');
+}
+
+function addFahrzeug() {
+  const inp = document.getElementById('fz-input');
+  const name = inp.value.trim();
+  if (!name) return;
+  if (state.fahrzeuge.includes(name)) { alert('Fahrzeug bereits vorhanden.'); return; }
+  state.fahrzeuge.push(name);
+  inp.value = '';
+  save();
+  renderFzPage();
+}
+
+function deleteFahrzeug(i) {
+  const name = state.fahrzeuge[i];
+  const used = state.entries.some(e => e.car === name);
+  if (used && !confirm(`"${name}" hat bereits Einträge. Trotzdem löschen?`)) return;
+  state.fahrzeuge.splice(i, 1);
+  save();
+  renderFzPage();
+  renderAll();
+}
+
+document.getElementById('fz-input').addEventListener('keydown', e => {
+  if (e.key === 'Enter') addFahrzeug();
+});
+
+// ── Init ───────────────────────────────────────────────────────────────
+load();
+renderAll();
+
+// ── iOS Install-Hinweis ────────────────────────────────────────────────
+const isIos = /iphone|ipad|ipod/i.test(navigator.userAgent);
+const isStandalone = window.navigator.standalone === true;
+const hintShown = localStorage.getItem('pwa_hint_shown');
+
+if (isIos && !isStandalone && !hintShown) {
+  setTimeout(() => {
+    const hint = document.createElement('div');
+    hint.style.cssText = `
+      position:fixed; bottom: calc(90px + env(safe-area-inset-bottom));
+      left:16px; right:16px; background:#1a1a26; border:1px solid #4f9cf9;
+      border-radius:16px; padding:14px 16px; z-index:999;
+      font-family:'DM Sans',sans-serif; font-size:13px; color:#e8e8f0;
+      box-shadow: 0 4px 24px rgba(0,0,0,0.5); animation: slideIn 0.4s ease;
+    `;
+    hint.innerHTML = `
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px;">
+        <div>
+          <div style="font-weight:600;margin-bottom:4px;color:#4f9cf9;">📲 Als App installieren</div>
+          <div style="color:#888;line-height:1.5;">
+            Tippe auf <strong style="color:#e8e8f0;">Teilen ⬆</strong> und dann auf
+            <strong style="color:#e8e8f0;">„Zum Home-Bildschirm"</strong> für die beste Erfahrung.
+          </div>
+        </div>
+        <button onclick="this.parentElement.parentElement.remove();localStorage.setItem('pwa_hint_shown','1')"
+          style="background:none;border:none;color:#666;font-size:20px;cursor:pointer;flex-shrink:0;padding:0 4px;">✕</button>
+      </div>
+    `;
+    document.body.appendChild(hint);
+    localStorage.setItem('pwa_hint_shown', '1');
+  }, 2500);
+}
+</script>
+</body>
+</html>
